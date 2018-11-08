@@ -24,6 +24,23 @@ $ gwc --context-regex "20[0-9]{2}" --lines-before 5 --lines-after 2 --contains-t
 $ gwc --context-text "hello" --lines-before 5 --lines-after 2 --contains-text "world" my_file.txt
 ```
 
+## Samples
+
+```
+ python cli.py -S "^class.*" -Ex "^[a-zA-Z].*" -c "def matches" -c "Matcher" -o="------------------" cli.py
+```
+
+## TODO
+
+### Compare these
+
+```
+ python cli.py -sx "\`\`\`" -ex "\`\`\`" -o="--------------------" ../blog/blog/content/posts/saas-like-isolation-in-django-rest-framework.md
+
+ python cli.py -S "^class.*" -Ex "^[a-zA-Z].*" -c "def matches" -c "Matcher" -o="------------------" cli.py
+```
+
+The `_.push` conflicts here.
 
 ## Open questions
 

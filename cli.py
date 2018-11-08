@@ -72,17 +72,48 @@ class ContainsRegexContextFilter(ContextFilter):
         return context.contains_regexp(self.regexp)
 
 
+class Matcher(ABC):
+
+    @abstractmethod
+    def matches(self, line):
+        pass
+
+
+class RegexMatcher(Matcher):
+
+    def __init__(self, regexp):
+        self.regexp = build_regexp_if_needed(regexp)
+
+    def matches(self, line):
+        return self.regexp.match(line) is not None
+
+
+class ContainsTextMatcher(Matcher):
+
+    def __init__(self, text):
+        self.text = text
+
+    def matches(self, line):
+        return self.text in line
+
+
+class ExactTextMatcher(Matcher):
+
+    def __init__(self, text):
+        self.text = text
+
+    def matches(self, line):
+        return line == self.text
+
+
 class ContextFactory:
 
-    def __init__(self, file, delimiter_start_text=None, delimiter_end_text=None, delimiter_start_regex=None,
-                 delimiter_end_regex=None, exclude_start_delimiter=False, exclude_end_delimiter=False):
+    def __init__(self, file, start_delimiter_matcher, end_delimiter_matcher, exclude_start_delimiter=False, exclude_end_delimiter=False):
 
         self.file = file
 
-        self.delimiter_start_text = delimiter_start_text
-        self.delimiter_end_text = delimiter_end_text
-        self.delimiter_start_regex = None
-        self.delimiter_end_regex = None
+        self.start_delimiter_matcher = start_delimiter_matcher
+        self.end_delimiter_matcher = end_delimiter_matcher
         self.exclude_start_delimiter = exclude_start_delimiter
         self.exclude_end_delimiter = exclude_end_delimiter
 
@@ -91,23 +122,11 @@ class ContextFactory:
 
         self.stack = deque()
 
-        if self.delimiter_start_text:
-            self.delimiter_start_fn = self._check_is_start_from_delimiter_start_text
-        elif delimiter_start_regex:
-            self.delimiter_start_regex = build_regexp_if_needed(delimiter_start_regex)
-            self.delimiter_start_fn = self._check_is_start_from_delimiter_start_regexp
-
-        if self.delimiter_end_text:
-            self.delimiter_end_fn = self._check_is_end_from_delimiter_end_text
-        elif delimiter_end_regex:
-            self.delimiter_end_regex = build_regexp_if_needed(delimiter_end_regex)
-            self.delimiter_end_fn = self._check_is_end_from_delimiter_end_regexp
+    def is_start(self, line):
+        return self.start_delimiter_matcher.matches(line)
 
     def is_end(self, line):
-        return self.delimiter_end_fn(line)
-
-    def is_start(self, line):
-        return self.delimiter_end_fn(line)
+        return self.end_delimiter_matcher.matches(line)
 
     def contexts(self):
         while True:
@@ -126,7 +145,9 @@ class ContextFactory:
                 if line is None:
                     break
                 if self.is_end(line):
-                    if not self.exclude_end_delimiter:
+                    if self.exclude_end_delimiter:
+                        self._push(line)
+                    else:
                         context_lines.append(line)
                     break
                 context_lines.append(line)
@@ -135,24 +156,12 @@ class ContextFactory:
 
     def _get_next_start_line(self):
         for line in self._lines():
-            if self.delimiter_start_fn(line):
+            if self.is_start(line):
                 return line
         return None
 
-    def _check_is_start_from_delimiter_start_text(self, line):
-        return self.delimiter_start_text in line
-
-    def _check_is_end_from_delimiter_end_text(self, line):
-        return self.delimiter_end_text in line
-
-    def _check_is_start_from_delimiter_start_regexp(self, line):
-        return self.delimiter_start_regex.match(line) is not None
-
-    def _check_is_end_from_delimiter_end_regexp(self, line):
-        return self.delimiter_end_regex.match(line) is not None
-
     def _push(self, line):
-        self.stack.push(line)
+        self.stack.append(line)
 
     def _pop(self):
         return self.stack.pop()
@@ -213,33 +222,59 @@ def main():
 
     args = ap.parse_args()
 
-    exclude_start = False
-    exclude_end = False
+
+    # TODO: These should actually be reusable classes. I should only need to pass in a start and end class and the
+    # class should figure out what to return.
     delimiter_start_text = args.delimiter_start_text or args.delimiter_start_text_exclude
     delimiter_start_regex = args.delimiter_start_regex or args.delimiter_start_regex_exclude
     delimiter_end_text = args.delimiter_end_text or args.delimiter_end_text_exclude
     delimiter_end_regex = args.delimiter_end_regex or args.delimiter_end_regex_exclude
+    delimiter_text = args.delimiter_text or args.delimiter_text_exclude
+    delimiter_regex = args.delimiter_regex or args.delimiter_regex_exclude
 
-    if args.delimiter_start_text_exclude:
-        exclude_start = True
+    start_delimiter_matcher = None
+    end_delimiter_matcher = None
+    exclude_start = False
+    exclude_end = False
 
-    if args.delimiter_start_regex_exclude:
-        exclude_start = True
+    if delimiter_start_text:
+        start_delimiter_matcher = ContainsTextMatcher(text=delimiter_start_text)
+        if args.delimiter_start_text_exclude:
+            exclude_start = True
+    elif delimiter_start_regex:
+        start_delimiter_matcher = RegexMatcher(regexp=delimiter_start_regex)
+        if args.delimiter_start_regex_exclude:
+            exclude_start = True
 
-    if args.delimiter_end_text_exclude:
-        exclude_end = True
+    if delimiter_end_text:
+        end_delimiter_matcher = ContainsTextMatcher(text=delimiter_end_text)
+        if args.delimiter_end_text_exclude:
+            exclude_end = True
+    elif delimiter_end_regex:
+        end_delimiter_matcher = RegexMatcher(regexp=delimiter_end_regex)
+        if args.delimiter_end_regex_exclude:
+            exclude_end = True
 
-    if args.delimiter_end_regex_exclude:
-        exclude_end = True
+    if not start_delimiter_matcher and not end_delimiter_matcher:
+        if delimiter_text:
+            start_delimiter_matcher = ContainsTextMatcher(text=delimiter_text)
+            end_delimiter_matcher = ContainsTextMatcher(text=delimiter_text)
+            if args.delimiter_text_exclude:
+                exclude_start = True
+                exclude_end = True
+        elif delimiter_regex:
+            start_delimiter_matcher = RegexMatcher(regexp=delimiter_regex)
+            end_delimiter_matcher = RegexMatcher(regexp=delimiter_regex)
+            if args.delimiter_regex_exclude:
+                exclude_start = True
+                exclude_end = True
 
     cf = ContextFactory(
         args.infile,
-        delimiter_start_text=delimiter_start_text,
-        delimiter_end_text=delimiter_end_text,
-        delimiter_start_regex=delimiter_start_regex,
-        delimiter_end_regex=delimiter_end_regex,
+        start_delimiter_matcher=start_delimiter_matcher,
+        end_delimiter_matcher=end_delimiter_matcher,
         exclude_start_delimiter=exclude_start,
-        exclude_end_delimiter=exclude_end
+        exclude_end_delimiter=exclude_end,
     )
 
     curr = cf
