@@ -1,0 +1,9 @@
+```
+Hello world (should be included)
+```
+
+Other stuff (this should not be included)
+
+```
+Other world (should be included)
+```

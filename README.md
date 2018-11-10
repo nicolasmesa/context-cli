@@ -81,3 +81,6 @@ Or it could simply return the first one.
     * `expr $(gwc --delimiter "-----" -c "hello" -o "delimiter" | grep "delimiter" | wc -l) + 1`
 * Handle sigpipe
 * There should be a way to skip the delimiter or to not include the delimiter in the current Context and use it in the next
+* Add Version.
+* Regex vs Regexp.
+* Logging / log levels.

@@ -1,17 +1,14 @@
-from abc import ABC, abstractmethod
 import argparse
-from collections import deque
 import logging
-import re
+from collections import deque
 
-logging.basicConfig(level=logging.DEBUG)
+from .matcher import ContainsTextMatcher, RegexMatcher
+
+from .filter import ContainsRegexContextFilter, ContainsTextContextFilter
+from .util import build_regexp_if_needed
+
+logging.basicConfig(level=logging.ERROR)
 logger = logging.getLogger(__name__)
-
-
-def build_regexp_if_needed(maybe_regexp):
-    if isinstance(maybe_regexp, str):
-        return re.compile(maybe_regexp)
-    return maybe_regexp
 
 
 class Context:
@@ -37,78 +34,9 @@ class Context:
         return '\n'.join(self.lines)
 
 
-class ContextFilter(ABC):
-
-    def __init__(self, context_generator):
-        self.context_generator = context_generator
-
-    @abstractmethod
-    def is_context_valid(self, context):
-        pass
-
-    def contexts(self):
-        for context in self.context_generator.contexts():
-            if self.is_context_valid(context):
-                yield context
-
-
-class ContainsTextContextFilter(ContextFilter):
-
-    def __init__(self, context_generator, text):
-        super().__init__(context_generator)
-        self.text = text
-
-    def is_context_valid(self, context):
-        return context.contains_text(self.text)
-
-
-class ContainsRegexContextFilter(ContextFilter):
-
-    def __init__(self, context_generator, regexp):
-        super().__init__(context_generator)
-        self.regexp = build_regexp_if_needed(regexp)
-
-    def is_context_valid(self, context):
-        return context.contains_regexp(self.regexp)
-
-
-class Matcher(ABC):
-
-    @abstractmethod
-    def matches(self, line):
-        pass
-
-
-class RegexMatcher(Matcher):
-
-    def __init__(self, regexp):
-        self.regexp = build_regexp_if_needed(regexp)
-
-    def matches(self, line):
-        return self.regexp.match(line) is not None
-
-
-class ContainsTextMatcher(Matcher):
-
-    def __init__(self, text):
-        self.text = text
-
-    def matches(self, line):
-        return self.text in line
-
-
-class ExactTextMatcher(Matcher):
-
-    def __init__(self, text):
-        self.text = text
-
-    def matches(self, line):
-        return line == self.text
-
-
 class ContextFactory:
 
-    def __init__(self, file, start_delimiter_matcher, end_delimiter_matcher, exclude_start_delimiter=False, exclude_end_delimiter=False):
+    def __init__(self, file, start_delimiter_matcher, end_delimiter_matcher, exclude_start_delimiter=False, exclude_end_delimiter=False, ignore_end_delimiter=True):
 
         self.file = file
 
@@ -116,6 +44,7 @@ class ContextFactory:
         self.end_delimiter_matcher = end_delimiter_matcher
         self.exclude_start_delimiter = exclude_start_delimiter
         self.exclude_end_delimiter = exclude_end_delimiter
+        self.ignore_end_delimiter = ignore_end_delimiter
 
         self.delimiter_start_fn = None
         self.delimiter_end_fn = None
@@ -146,7 +75,8 @@ class ContextFactory:
                     break
                 if self.is_end(line):
                     if self.exclude_end_delimiter:
-                        self._push(line)
+                        if not self.ignore_end_delimiter:
+                            self._push(line)
                     else:
                         context_lines.append(line)
                     break
@@ -193,12 +123,9 @@ def main():
     ap.add_argument('-e', '--delimiter-end-text', help='delimiter end text')
     ap.add_argument('-E', '--delimiter-end-regex', help='delimiter end regex')
 
-    ap.add_argument('-dx', '--delimiter-text-exclude', help="delimiter text but exclude it from the contexts")
-    ap.add_argument('-Dx', '--delimiter-regex-exclude', help="delimiter regex but exclude it from the contexts")
-    ap.add_argument('-sx', '--delimiter-start-text-exclude', help="delimiter start text but exclude it from the contexts")
-    ap.add_argument('-Sx', '--delimiter-start-regex-exclude', help='delimiter start regex but exclude it from the contexts')
-    ap.add_argument('-ex', '--delimiter-end-text-exclude', help='delimiter end text but exclude it from the contexts')
-    ap.add_argument('-Ex', '--delimiter-end-regex-exclude', help='delimiter end regex but exclude it from the contexts')
+    # TODO Ugly. The interface should be easier than this
+    ap.add_argument('-fs', '--start-delimiter-flags', help='x: exclude delimiter', default='')
+    ap.add_argument('-fe', '--end-delimiter-flags', help='x: exclude delimiter, i: ignore delimiter (will not be used as a start delimiter)', default='')
 
     ap.add_argument('-c', '--contains-text', help='context contains text', action='append', default=[])
     ap.add_argument('-C', '--contains-regex', help='context contains regex', action='append', default=[])
@@ -225,49 +152,47 @@ def main():
 
     # TODO: These should actually be reusable classes. I should only need to pass in a start and end class and the
     # class should figure out what to return.
-    delimiter_start_text = args.delimiter_start_text or args.delimiter_start_text_exclude
-    delimiter_start_regex = args.delimiter_start_regex or args.delimiter_start_regex_exclude
-    delimiter_end_text = args.delimiter_end_text or args.delimiter_end_text_exclude
-    delimiter_end_regex = args.delimiter_end_regex or args.delimiter_end_regex_exclude
-    delimiter_text = args.delimiter_text or args.delimiter_text_exclude
-    delimiter_regex = args.delimiter_regex or args.delimiter_regex_exclude
+    delimiter_start_text = args.delimiter_start_text
+    delimiter_start_regex = args.delimiter_start_regex
+    delimiter_end_text = args.delimiter_end_text
+    delimiter_end_regex = args.delimiter_end_regex
+    delimiter_text = args.delimiter_text
+    delimiter_regex = args.delimiter_regex
 
     start_delimiter_matcher = None
     end_delimiter_matcher = None
-    exclude_start = False
-    exclude_end = False
+    exclude_start = 'x' in args.start_delimiter_flags
+    exclude_end = 'x' in args.end_delimiter_flags
+    ignore_end_delimiter = 'i' in args.end_delimiter_flags
 
     if delimiter_start_text:
         start_delimiter_matcher = ContainsTextMatcher(text=delimiter_start_text)
-        if args.delimiter_start_text_exclude:
-            exclude_start = True
     elif delimiter_start_regex:
         start_delimiter_matcher = RegexMatcher(regexp=delimiter_start_regex)
-        if args.delimiter_start_regex_exclude:
-            exclude_start = True
 
     if delimiter_end_text:
         end_delimiter_matcher = ContainsTextMatcher(text=delimiter_end_text)
-        if args.delimiter_end_text_exclude:
-            exclude_end = True
     elif delimiter_end_regex:
         end_delimiter_matcher = RegexMatcher(regexp=delimiter_end_regex)
-        if args.delimiter_end_regex_exclude:
-            exclude_end = True
 
     if not start_delimiter_matcher and not end_delimiter_matcher:
+        exclude_start = True
+        exclude_end = True
+
+        # End delimiter needs to be start delimiter
+        ignore_end_delimiter = False
         if delimiter_text:
             start_delimiter_matcher = ContainsTextMatcher(text=delimiter_text)
             end_delimiter_matcher = ContainsTextMatcher(text=delimiter_text)
-            if args.delimiter_text_exclude:
-                exclude_start = True
-                exclude_end = True
         elif delimiter_regex:
             start_delimiter_matcher = RegexMatcher(regexp=delimiter_regex)
             end_delimiter_matcher = RegexMatcher(regexp=delimiter_regex)
-            if args.delimiter_regex_exclude:
-                exclude_start = True
-                exclude_end = True
+        else:
+            raise Exception('Expected delimiters')
+
+
+    logger.debug("args: start_delimiter_matcher:%s, end_delimiter_matcher:%s, exclude_start_delimiter:%s, exclude_end_delimiter: %s, end_delimiter_can_be_start_delimiter: %s",
+                start_delimiter_matcher, end_delimiter_matcher, exclude_start, exclude_end, ignore_end_delimiter)
 
     cf = ContextFactory(
         args.infile,
@@ -275,6 +200,7 @@ def main():
         end_delimiter_matcher=end_delimiter_matcher,
         exclude_start_delimiter=exclude_start,
         exclude_end_delimiter=exclude_end,
+        ignore_end_delimiter=ignore_end_delimiter,
     )
 
     curr = cf
@@ -298,6 +224,3 @@ def main():
             sys.stdout.write('\n')
         sys.stdout.flush()
 
-
-if __name__ == '__main__':
-    main()
