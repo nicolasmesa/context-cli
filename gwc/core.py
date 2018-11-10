@@ -4,8 +4,12 @@ from collections import deque
 
 from .matcher import ContainsTextMatcher, RegexMatcher
 
-from .filter import ContainsRegexContextFilter, ContainsTextContextFilter
-from .util import build_regexp_if_needed
+from .filter import (ContainsRegexContextFilter, ContainsTextContextFilter,
+                     MatchesTextContextFilter, MatchesRegexContextFilter,
+                     NotContainsTextContextFilter, NotContainsRegexContextFilter,
+                     NotMatchesTextContextFilter, NotMatchesRegexContextFilter,
+                     NotEmptyContextFilter)
+
 
 logging.basicConfig(level=logging.ERROR)
 logger = logging.getLogger(__name__)
@@ -14,21 +18,11 @@ logger = logging.getLogger(__name__)
 class Context:
 
     def __init__(self, lines):
-        self.lines = lines
+        self._lines = lines
 
-    def contains_text(self, text):
-        return any(text in line for line in self.lines)
-
-    def contains_regexp(self, regexp):
-        regexp = build_regexp_if_needed(regexp)
-        return any(regexp.match(line) for line in self.lines)
-
-    def matches_text(self, text):
-        return any(text == line for line in self.lines)
-
-    def matches_regexp(self, regexp):
-        # We could add ^ and $ at the end if it doesn't have it already, but I'm not sure how useful.
-        return self.contains_regexp(regexp)
+    @property
+    def lines(self):
+        return self._lines
 
     def __str__(self):
         return '\n'.join(self.lines)
@@ -114,7 +108,7 @@ def main():
     import sys
 
     ap = argparse.ArgumentParser(
-        description='Grep with context'
+        description='gwc: grep with context'
     )
     ap.add_argument('-d', '--delimiter-text', help="delimiter text")
     ap.add_argument('-D', '--delimiter-regex', help="delimiter regex")
@@ -127,20 +121,24 @@ def main():
     ap.add_argument('-fs', '--start-delimiter-flags', help='x: exclude delimiter', default='')
     ap.add_argument('-fe', '--end-delimiter-flags', help='x: exclude delimiter, i: ignore delimiter (will not be used as a start delimiter)', default='')
 
+    # Context filters
     ap.add_argument('-c', '--contains-text', help='context contains text', action='append', default=[])
     ap.add_argument('-C', '--contains-regex', help='context contains regex', action='append', default=[])
     ap.add_argument('-m', '--matches-text', help='context matches text', action='append', default=[])
     ap.add_argument('-M', '--matches-regex', help='context matches regex', action='append', default=[])
-    ap.add_argument('-l', '--line-contains-text', help='line contains text', action='append', default=[])
-    ap.add_argument('-L', '--line-contains-regex', help='line contains regex', action='append', default=[])
 
     ap.add_argument('-c!', '--not-contains-text', help='context does not contain text', action='append', default=[])
     ap.add_argument('-C!', '--not-contains-regex', help='context contains regex', action='append', default=[])
     ap.add_argument('-m!', '--not-matches-text', help='context does not match text', action='append', default=[])
     ap.add_argument('-M!', '--not-matches-regex', help='context does not match regex', action='append', default=[])
+
+    # Line filters
+    ap.add_argument('-l', '--line-contains-text', help='line contains text', action='append', default=[])
+    ap.add_argument('-L', '--line-contains-regex', help='line contains regex', action='append', default=[])
     ap.add_argument('-l!', '--not-line-contains-text', help='line doest not contain text', action='append', default=[])
     ap.add_argument('-L!', '--not-line-contains-regex', help='line does not contain regex', action='append', default=[])
 
+    # Output
     ap.add_argument('-o', '--output-delimiter', help='Output delimiter', default='')
 
     ap.add_argument('infile', nargs='?', type=argparse.FileType('r'), default=sys.stdin)
@@ -205,11 +203,34 @@ def main():
 
     curr = cf
 
+    # We do text matching first because it's a bit faster. This helps filter out some contexts before they reach the
+    # regex matchers which are slower.
+    for text in args.matches_text:
+        curr = MatchesTextContextFilter(context_generator=curr, text=text)
+
+    for text in args.not_matches_text:
+        curr = NotMatchesTextContextFilter(context_generator=curr, text=text)
+
     for text in args.contains_text:
         curr = ContainsTextContextFilter(context_generator=curr, text=text)
 
+    for text in args.not_contains_text:
+        curr = NotContainsTextContextFilter(context_generator=curr, text=text)
+
+    for regexp in args.matches_regex:
+        curr = MatchesRegexContextFilter(context_generator=curr, regexp=regexp)
+
+    for regexp in args.not_matches_regex:
+        curr = NotMatchesRegexContextFilter(context_generator=curr, regexp=regexp)
+
     for regexp in args.contains_regex:
         curr = ContainsRegexContextFilter(context_generator=curr, regexp=regexp)
+
+    for regexp in args.not_contains_regex:
+        curr = NotContainsRegexContextFilter(context_generator=curr, regexp=regexp)
+
+    # Ensure no empty contexts
+    curr = NotEmptyContextFilter(context_generator=curr)
 
     first = True
     for ctx in curr.contexts():
