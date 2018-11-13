@@ -24,7 +24,7 @@ def main():
     import sys
 
     ap = argparse.ArgumentParser(
-        description='gwc: grep with context'
+        description='context_cli: grep with context'
     )
     ap.add_argument('-d', '--delimiter-text', help="delimiter text")
     ap.add_argument('-D', '--delimiter-regex', help="delimiter regex")
@@ -57,12 +57,12 @@ def main():
     # Output
     ap.add_argument('-o', '--output-delimiter', help='Output delimiter', default='')
 
-    ap.add_argument('infile', nargs='?', type=argparse.FileType('r'), default=sys.stdin)
+    ap.add_argument('infiles', nargs='*', type=argparse.FileType('r'), default=sys.stdin)
+
 
     # TODO Validate combinations of these
 
     args = ap.parse_args()
-
 
     # TODO: These should actually be reusable classes. I should only need to pass in a start and end class and the
     # class should figure out what to return.
@@ -104,73 +104,72 @@ def main():
         else:
             raise Exception('Expected delimiters')
 
-
     logger.debug("args: start_delimiter_matcher:%s, end_delimiter_matcher:%s, exclude_start_delimiter:%s, exclude_end_delimiter: %s, end_delimiter_can_be_start_delimiter: %s",
                 start_delimiter_matcher, end_delimiter_matcher, exclude_start, exclude_end, ignore_end_delimiter)
 
-    cf = ContextFactory(
-        args.infile,
-        start_delimiter_matcher=start_delimiter_matcher,
-        end_delimiter_matcher=end_delimiter_matcher,
-        exclude_start_delimiter=exclude_start,
-        exclude_end_delimiter=exclude_end,
-        ignore_end_delimiter=ignore_end_delimiter,
-    )
-
-    curr = cf
-
-    # We do text matching first because it's a bit faster. This helps filter out some contexts before they reach the
-    # regex matchers which are slower.
-    for text in args.matches_text:
-        curr = MatchesTextContextFilter(context_generator=curr, text=text)
-
-    for text in args.not_matches_text:
-        curr = NotMatchesTextContextFilter(context_generator=curr, text=text)
-
-    for text in args.contains_text:
-        curr = ContainsTextContextFilter(context_generator=curr, text=text)
-
-    for text in args.not_contains_text:
-        curr = NotContainsTextContextFilter(context_generator=curr, text=text)
-
-    for regexp in args.matches_regex:
-        curr = MatchesRegexContextFilter(context_generator=curr, regexp=regexp)
-
-    for regexp in args.not_matches_regex:
-        curr = NotMatchesRegexContextFilter(context_generator=curr, regexp=regexp)
-
-    for regexp in args.contains_regex:
-        curr = ContainsRegexContextFilter(context_generator=curr, regexp=regexp)
-
-    for regexp in args.not_contains_regex:
-        curr = NotContainsRegexContextFilter(context_generator=curr, regexp=regexp)
-
-    for text in args.line_contains_text:
-        curr = ContainsTextLineFilter(context_generator=curr, text=text)
-
-    for text in args.not_line_contains_text:
-        curr = NotContainsTextLineFilter(context_generator=curr, text=text)
-
-    for regexp in args.line_contains_regex:
-        curr = ContainsRegexLineFilter(context_generator=curr, regexp=regexp)
-
-    for regexp in args.not_line_contains_regex:
-        curr = NotContainsRegexLineFilter(context_generator=curr, regexp=regexp)
-
-
-    # Ensure no empty contexts
-    curr = NotEmptyContextFilter(context_generator=curr)
-
     first = True
-    for ctx in curr.contexts():
-        if not first:
-            sys.stdout.write(args.output_delimiter)
-            sys.stdout.write('\n')
-        first = False
+    for file in args.infiles:
+        cf = ContextFactory(
+            file,
+            start_delimiter_matcher=start_delimiter_matcher,
+            end_delimiter_matcher=end_delimiter_matcher,
+            exclude_start_delimiter=exclude_start,
+            exclude_end_delimiter=exclude_end,
+            ignore_end_delimiter=ignore_end_delimiter,
+        )
 
-        text = str(ctx)
-        sys.stdout.write(text)
-        if not text.endswith('\n'):
-            sys.stdout.write('\n')
-        sys.stdout.flush()
+        curr = cf
+
+        # We do text matching first because it's a bit faster. This helps filter out some contexts before they reach the
+        # regex matchers which are slower.
+        for text in args.matches_text:
+            curr = MatchesTextContextFilter(context_generator=curr, text=text)
+
+        for text in args.not_matches_text:
+            curr = NotMatchesTextContextFilter(context_generator=curr, text=text)
+
+        for text in args.contains_text:
+            curr = ContainsTextContextFilter(context_generator=curr, text=text)
+
+        for text in args.not_contains_text:
+            curr = NotContainsTextContextFilter(context_generator=curr, text=text)
+
+        for regexp in args.matches_regex:
+            curr = MatchesRegexContextFilter(context_generator=curr, regexp=regexp)
+
+        for regexp in args.not_matches_regex:
+            curr = NotMatchesRegexContextFilter(context_generator=curr, regexp=regexp)
+
+        for regexp in args.contains_regex:
+            curr = ContainsRegexContextFilter(context_generator=curr, regexp=regexp)
+
+        for regexp in args.not_contains_regex:
+            curr = NotContainsRegexContextFilter(context_generator=curr, regexp=regexp)
+
+        for text in args.line_contains_text:
+            curr = ContainsTextLineFilter(context_generator=curr, text=text)
+
+        for text in args.not_line_contains_text:
+            curr = NotContainsTextLineFilter(context_generator=curr, text=text)
+
+        for regexp in args.line_contains_regex:
+            curr = ContainsRegexLineFilter(context_generator=curr, regexp=regexp)
+
+        for regexp in args.not_line_contains_regex:
+            curr = NotContainsRegexLineFilter(context_generator=curr, regexp=regexp)
+
+        # Ensure no empty contexts
+        curr = NotEmptyContextFilter(context_generator=curr)
+
+        for ctx in curr.contexts():
+            if not first:
+                sys.stdout.write(args.output_delimiter)
+                sys.stdout.write('\n')
+            first = False
+
+            text = str(ctx)
+            sys.stdout.write(text)
+            if not text.endswith('\n'):
+                sys.stdout.write('\n')
+            sys.stdout.flush()
 
