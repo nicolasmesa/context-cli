@@ -23,6 +23,7 @@ class ContextFilter(BaseFilter):
     """
 
     def __init__(self, context_generator):
+        super().__init__()
         self.context_generator = context_generator
 
     @abstractmethod
@@ -152,6 +153,7 @@ class NotEmptyContextFilter(ContextFilter):
 class LineFilter(BaseFilter):
 
     def __init__(self, context_generator):
+        super().__init__()
         self.context_generator = context_generator
 
     @abstractmethod

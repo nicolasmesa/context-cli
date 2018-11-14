@@ -19,7 +19,7 @@ class Context:
 
 class ContextFactory:
 
-    def __init__(self, file, start_delimiter_matcher, end_delimiter_matcher, exclude_start_delimiter=False, exclude_end_delimiter=False, ignore_end_delimiter=True):
+    def __init__(self, file, start_delimiter_matcher, end_delimiter_matcher, exclude_start_delimiter=False, exclude_end_delimiter=False, ignore_end_delimiter=True, first_line=None):
 
         self.file = file
 
@@ -33,6 +33,10 @@ class ContextFactory:
         self.delimiter_end_fn = None
 
         self.stack = deque()
+
+        # TODO: Hack to make it work when -d is used since we want it to start "recording" from the first line.
+        if first_line is not None:
+            self.stack.append(first_line)
 
     def is_start(self, line):
         return self.start_delimiter_matcher.matches(line)

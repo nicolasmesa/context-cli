@@ -11,7 +11,7 @@ from .filter import (
     # LineFilters
     ContainsTextLineFilter, ContainsRegexLineFilter, NotContainsTextLineFilter, NotContainsRegexLineFilter,
 )
-from .matcher import ContainsTextMatcher, RegexMatcher
+from .matcher import ContainsTextMatcher, RegexMatcher, MatchFirstLine
 
 
 
@@ -22,9 +22,10 @@ logger = logging.getLogger(__name__)
 
 def main():
     import sys
+    from . import __doc__
 
     ap = argparse.ArgumentParser(
-        description='context_cli: grep with context'
+        description=__doc__
     )
     ap.add_argument('-d', '--delimiter-text', help="delimiter text")
     ap.add_argument('-D', '--delimiter-regex', help="delimiter regex")
@@ -34,6 +35,7 @@ def main():
     ap.add_argument('-E', '--delimiter-end-regex', help='delimiter end regex')
 
     # TODO Ugly. The interface should be easier than this
+    # See https://stackoverflow.com/a/21286343
     ap.add_argument('-fs', '--start-delimiter-flags', help='x: exclude delimiter', default='')
     ap.add_argument('-fe', '--end-delimiter-flags', help='x: exclude delimiter, i: ignore delimiter (will not be used as a start delimiter)', default='')
 
@@ -56,7 +58,6 @@ def main():
 
     # Output
     ap.add_argument('-o', '--output-delimiter', help='Output delimiter', default='')
-
     ap.add_argument('infiles', nargs='*', type=argparse.FileType('r'), default=sys.stdin)
 
 
@@ -78,6 +79,7 @@ def main():
     exclude_start = 'x' in args.start_delimiter_flags
     exclude_end = 'x' in args.end_delimiter_flags
     ignore_end_delimiter = 'i' in args.end_delimiter_flags
+    first_line = None
 
     if delimiter_start_text:
         start_delimiter_matcher = ContainsTextMatcher(text=delimiter_start_text)
@@ -92,14 +94,15 @@ def main():
     if not start_delimiter_matcher and not end_delimiter_matcher:
         exclude_start = True
         exclude_end = True
+        first_line = ''
 
         # End delimiter needs to be start delimiter
         ignore_end_delimiter = False
         if delimiter_text:
-            start_delimiter_matcher = ContainsTextMatcher(text=delimiter_text)
+            start_delimiter_matcher = MatchFirstLine(ContainsTextMatcher(text=delimiter_text))
             end_delimiter_matcher = ContainsTextMatcher(text=delimiter_text)
         elif delimiter_regex:
-            start_delimiter_matcher = RegexMatcher(regexp=delimiter_regex)
+            start_delimiter_matcher = MatchFirstLine(RegexMatcher(regexp=delimiter_regex))
             end_delimiter_matcher = RegexMatcher(regexp=delimiter_regex)
         else:
             raise Exception('Expected delimiters')
@@ -116,6 +119,7 @@ def main():
             exclude_start_delimiter=exclude_start,
             exclude_end_delimiter=exclude_end,
             ignore_end_delimiter=ignore_end_delimiter,
+            first_line=first_line,
         )
 
         curr = cf
