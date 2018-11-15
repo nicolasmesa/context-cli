@@ -34,27 +34,42 @@ def main():
     ap.add_argument('-e', '--delimiter-end-text', help='delimiter end text')
     ap.add_argument('-E', '--delimiter-end-regex', help='delimiter end regex')
 
-    # TODO Ugly. The interface should be easier than this
-    # See https://stackoverflow.com/a/21286343
-    ap.add_argument('-fs', '--start-delimiter-flags', help='x: exclude delimiter', default='')
-    ap.add_argument('-fe', '--end-delimiter-flags', help='x: exclude delimiter, i: ignore delimiter (will not be used as a start delimiter)', default='')
+    ap.add_argument('-x', '--exclude-start-delimiter',
+                    help='exclude start delimiter from the context', action='store_const', const=True, default=False)
+    ap.add_argument('-X', '--exclude-end-delimiter',
+                    help='exclude end delimiter from the context', action='store_const', const=True, default=False)
+    ap.add_argument('-i', '--ignore-end-delimiter',
+                    help='prevent end delimiter from being considered as a start delimiter (only applies if -X is used)',
+                    action='store_const', const=True, default=False)
 
     # Context filters
-    ap.add_argument('-c', '--contains-text', help='context contains text', action='append', default=[])
-    ap.add_argument('-C', '--contains-regex', help='context contains regex', action='append', default=[])
-    ap.add_argument('-m', '--matches-text', help='context matches text', action='append', default=[])
-    ap.add_argument('-M', '--matches-regex', help='context matches regex', action='append', default=[])
+    ap.add_argument('-c', '--contains-text',
+                    help='display only contexts that have line(s) that contain this text', action='append', default=[])
+    ap.add_argument('-C', '--contains-regex',
+                    help='display only contexts that have line(s) that contain this regex', action='append', default=[])
+    ap.add_argument('-m', '--matches-text',
+                    help='display only contexts that have line(s) that exactly match this text', action='append', default=[])
+    ap.add_argument('-M', '--matches-regex',
+                    help='display only contexts that have line(s) that exactly match this regex', action='append', default=[])
 
-    ap.add_argument('-c!', '--not-contains-text', help='context does not contain text', action='append', default=[])
-    ap.add_argument('-C!', '--not-contains-regex', help='context contains regex', action='append', default=[])
-    ap.add_argument('-m!', '--not-matches-text', help='context does not match text', action='append', default=[])
-    ap.add_argument('-M!', '--not-matches-regex', help='context does not match regex', action='append', default=[])
+    ap.add_argument('-c!', '--not-contains-text',
+                    help="display only contexts that have line(s) that don't contain this text", action='append', default=[])
+    ap.add_argument('-C!', '--not-contains-regex',
+                    help="display only contexts that have line(s) that don't contain this regex", action='append', default=[])
+    ap.add_argument('-m!', '--not-matches-text',
+                    help="display only contexts that have line(s) that don't exactly match this text", action='append', default=[])
+    ap.add_argument('-M!', '--not-matches-regex',
+                    help="display only contexts that have line(s) that don't exactly match this regex", action='append', default=[])
 
     # Line filters
-    ap.add_argument('-l', '--line-contains-text', help='line contains text', action='append', default=[])
-    ap.add_argument('-L', '--line-contains-regex', help='line contains regex', action='append', default=[])
-    ap.add_argument('-l!', '--not-line-contains-text', help='line doest not contain text', action='append', default=[])
-    ap.add_argument('-L!', '--not-line-contains-regex', help='line does not contain regex', action='append', default=[])
+    ap.add_argument('-l', '--line-contains-text',
+                    help='display only lines in the context that contain this text', action='append', default=[])
+    ap.add_argument('-L', '--line-contains-regex',
+                    help='display only lines in the context that contain this regex', action='append', default=[])
+    ap.add_argument('-l!', '--not-line-contains-text',
+                    help="display only lines in the context that don't contain this text", action='append', default=[])
+    ap.add_argument('-L!', '--not-line-contains-regex',
+                    help="display only lines in the context that don't contain this regex", action='append', default=[])
 
     # Output
     ap.add_argument('-o', '--output-delimiter', help='Output delimiter', default='')
@@ -76,9 +91,9 @@ def main():
 
     start_delimiter_matcher = None
     end_delimiter_matcher = None
-    exclude_start = 'x' in args.start_delimiter_flags
-    exclude_end = 'x' in args.end_delimiter_flags
-    ignore_end_delimiter = 'i' in args.end_delimiter_flags
+    exclude_start = args.exclude_start_delimiter
+    exclude_end = args.exclude_end_delimiter
+    ignore_end_delimiter = args.ignore_end_delimiter
     first_line = None
 
     if delimiter_start_text:
@@ -104,8 +119,9 @@ def main():
         elif delimiter_regex:
             start_delimiter_matcher = MatchFirstLine(RegexMatcher(regexp=delimiter_regex))
             end_delimiter_matcher = RegexMatcher(regexp=delimiter_regex)
-        else:
-            raise Exception('Expected delimiters')
+
+    if not start_delimiter_matcher or not end_delimiter_matcher:
+        ap.error('Expected delimiters to be set. Use -d/-D or -s/-S and -e/-E.')
 
     logger.debug("args: start_delimiter_matcher:%s, end_delimiter_matcher:%s, exclude_start_delimiter:%s, exclude_end_delimiter: %s, end_delimiter_can_be_start_delimiter: %s",
                 start_delimiter_matcher, end_delimiter_matcher, exclude_start, exclude_end, ignore_end_delimiter)
@@ -166,7 +182,7 @@ def main():
         curr = NotEmptyContextFilter(context_generator=curr)
 
         for ctx in curr.contexts():
-            if not first:
+            if not first and args.output_delimiter:
                 sys.stdout.write(args.output_delimiter)
                 sys.stdout.write('\n')
             first = False
