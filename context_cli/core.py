@@ -1,7 +1,7 @@
 import argparse
 import logging
 
-from .context import ContextFactory
+from .context import StartAndEndDelimiterContextFactory, SingleDelimiterContextFactory
 from .filter import (
     # ContextFilters
     ContainsRegexContextFilter, ContainsTextContextFilter, MatchesTextContextFilter, MatchesRegexContextFilter,
@@ -11,13 +11,35 @@ from .filter import (
     # LineFilters
     ContainsTextLineFilter, ContainsRegexLineFilter, NotContainsTextLineFilter, NotContainsRegexLineFilter,
 )
-from .matcher import ContainsTextMatcher, RegexMatcher, MatchFirstLine
-
-
+from .matcher import ContainsTextMatcher, RegexMatcher
 
 logging.basicConfig(level=logging.ERROR)
 logger = logging.getLogger(__name__)
 
+
+def start_and_end_delimiter_context_factory_creator(start_delimiter_matcher, end_delimiter_matcher, exclude_start, exclude_end, ignore_end_delimiter):
+
+    def factory(file):
+        return StartAndEndDelimiterContextFactory(
+            file,
+            start_delimiter_matcher=start_delimiter_matcher,
+            end_delimiter_matcher=end_delimiter_matcher,
+            exclude_start_delimiter=exclude_start,
+            exclude_end_delimiter=exclude_end,
+            ignore_end_delimiter=ignore_end_delimiter,
+        )
+
+    return factory
+
+
+def single_delimiter_context_factory_creator(delimiter_matcher, exclude_delimiter):
+    def factory(file):
+        return SingleDelimiterContextFactory(
+            file,
+            delimiter_matcher=delimiter_matcher,
+            exclude_delimiter=exclude_delimiter
+        )
+    return factory
 
 
 def main():
@@ -94,7 +116,8 @@ def main():
     exclude_start = args.exclude_start_delimiter
     exclude_end = args.exclude_end_delimiter
     ignore_end_delimiter = args.ignore_end_delimiter
-    first_line = None
+
+    context_factory_factory = None
 
     if delimiter_start_text:
         start_delimiter_matcher = ContainsTextMatcher(text=delimiter_start_text)
@@ -106,21 +129,34 @@ def main():
     elif delimiter_end_regex:
         end_delimiter_matcher = RegexMatcher(regexp=delimiter_end_regex)
 
-    if not start_delimiter_matcher and not end_delimiter_matcher:
+    if start_delimiter_matcher and end_delimiter_matcher:
+        context_factory_factory = start_and_end_delimiter_context_factory_creator(
+            start_delimiter_matcher=start_delimiter_matcher,
+            end_delimiter_matcher=end_delimiter_matcher,
+            exclude_start=exclude_start,
+            exclude_end=exclude_end,
+            ignore_end_delimiter=ignore_end_delimiter,
+        )
+    elif delimiter_text or delimiter_regex:
         exclude_start = True
         exclude_end = True
-        first_line = ''
 
         # End delimiter needs to be start delimiter
-        ignore_end_delimiter = False
+        delimiter_matcher = None
+        exclude_delimiter = True
         if delimiter_text:
-            start_delimiter_matcher = MatchFirstLine(ContainsTextMatcher(text=delimiter_text))
-            end_delimiter_matcher = ContainsTextMatcher(text=delimiter_text)
+            delimiter_matcher = ContainsTextMatcher(text=delimiter_text)
         elif delimiter_regex:
-            start_delimiter_matcher = MatchFirstLine(RegexMatcher(regexp=delimiter_regex))
-            end_delimiter_matcher = RegexMatcher(regexp=delimiter_regex)
+            delimiter_matcher = RegexMatcher(regexp=delimiter_regex)
 
-    if not start_delimiter_matcher or not end_delimiter_matcher:
+        if delimiter_matcher:
+            context_factory_factory = single_delimiter_context_factory_creator(
+                delimiter_matcher=delimiter_matcher,
+                exclude_delimiter=exclude_delimiter
+            )
+
+
+    if not context_factory_factory:
         ap.error('Expected delimiters to be set. Use -d/-D or -s/-S and -e/-E.')
 
     logger.debug("args: start_delimiter_matcher:%s, end_delimiter_matcher:%s, exclude_start_delimiter:%s, exclude_end_delimiter: %s, end_delimiter_can_be_start_delimiter: %s",
@@ -128,17 +164,9 @@ def main():
 
     first = True
     for file in args.infiles:
-        cf = ContextFactory(
-            file,
-            start_delimiter_matcher=start_delimiter_matcher,
-            end_delimiter_matcher=end_delimiter_matcher,
-            exclude_start_delimiter=exclude_start,
-            exclude_end_delimiter=exclude_end,
-            ignore_end_delimiter=ignore_end_delimiter,
-            first_line=first_line,
-        )
+        context_factory = context_factory_factory(file)
 
-        curr = cf
+        curr = context_factory
 
         # We do text matching first because it's a bit faster. This helps filter out some contexts before they reach the
         # regex matchers which are slower.
@@ -181,7 +209,7 @@ def main():
         # Ensure no empty contexts
         curr = NotEmptyContextFilter(context_generator=curr)
 
-        for ctx in curr.contexts():
+        for ctx in curr:
             if not first and args.output_delimiter:
                 sys.stdout.write(args.output_delimiter)
                 sys.stdout.write('\n')

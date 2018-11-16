@@ -13,7 +13,7 @@ class BaseFilter(ABC):
     Abstract base filter class.
     """
     @abstractmethod
-    def contexts(self):
+    def __iter__(self):
         pass
 
 
@@ -30,8 +30,8 @@ class ContextFilter(BaseFilter):
     def is_context_valid(self, context):
         pass
 
-    def contexts(self):
-        for context in self.context_generator.contexts():
+    def __iter__(self):
+        for context in self.context_generator:
             if self.is_context_valid(context):
                 yield context
 
@@ -160,8 +160,8 @@ class LineFilter(BaseFilter):
     def filter_line(self, line):
         pass
 
-    def contexts(self):
-        for context in self.context_generator.contexts():
+    def __iter__(self):
+        for context in self.context_generator:
             yield self.get_filtered_context(context)
 
     def get_filter(self, context):

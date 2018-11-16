@@ -18,20 +18,6 @@ class Matcher(ABC):
         pass
 
 
-# TODO Remove this class. This responsibility should not go in the matcher.
-class MatchFirstLine(Matcher):
-
-    def __init__(self, matcher):
-        self.matcher = matcher
-        self._first = True
-
-    def matches(self, line):
-        if self._first:
-            self._first = False
-            return True
-        return self.matcher.matches(line)
-
-
 class RegexMatcher(Matcher):
 
     def __init__(self, regexp):
