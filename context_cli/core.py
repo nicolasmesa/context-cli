@@ -95,7 +95,7 @@ def main():
 
     # Output
     ap.add_argument('-o', '--output-delimiter', help='Output delimiter', default='')
-    ap.add_argument('infiles', nargs='*', type=argparse.FileType('r'), default=sys.stdin)
+    ap.add_argument('files', nargs='*', type=argparse.FileType('r'), default=sys.stdin)
 
 
     # TODO Validate combinations of these
@@ -163,7 +163,7 @@ def main():
                 start_delimiter_matcher, end_delimiter_matcher, exclude_start, exclude_end, ignore_end_delimiter)
 
     first = True
-    for file in args.infiles:
+    for file in args.files:
         context_factory = context_factory_factory(file)
 
         curr = context_factory
