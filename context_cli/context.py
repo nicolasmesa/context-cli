@@ -55,7 +55,7 @@ class ContextFactoryBase(ABC):
         self.file_iterator = FileIterator(file)
 
     @abstractmethod
-    def __iter__(self):
+    def __iter__(self): # pragma: no cover
         pass
 
 
