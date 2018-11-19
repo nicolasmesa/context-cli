@@ -2,10 +2,14 @@
 Module containing the filters available
 """
 
+import logging
 from abc import ABC, abstractmethod
 
 from .context import Context
 from .util import build_regexp_if_needed
+
+
+logger = logging.getLogger(__name__)
 
 
 class BaseFilter(ABC):
@@ -13,7 +17,7 @@ class BaseFilter(ABC):
     Abstract base filter class.
     """
     @abstractmethod
-    def __iter__(self):
+    def __iter__(self): # pragma: no cover
         pass
 
 
@@ -27,7 +31,7 @@ class ContextFilter(BaseFilter):
         self.context_generator = context_generator
 
     @abstractmethod
-    def is_context_valid(self, context):
+    def is_context_valid(self, context): # pragma: no cover
         pass
 
     def __iter__(self):
@@ -107,10 +111,10 @@ class MatchesRegexContextFilter(ContextFilter):
     """
     def __init__(self, context_generator, regexp):
         super().__init__(context_generator)
-        self.regexp = build_regexp_if_needed(regexp, match_start_and_end=True)
+        self.regexp = build_regexp_if_needed(regexp)
 
     def is_context_valid(self, context):
-        return any(self.regexp.match(line) for line in context.lines)
+        return any(self.regexp.fullmatch(line) for line in context.lines)
 
 
 class NotContainsTextContextFilter(NegateContextFilterMixin, ContainsTextContextFilter):
@@ -157,7 +161,7 @@ class LineFilter(BaseFilter):
         self.context_generator = context_generator
 
     @abstractmethod
-    def filter_line(self, line):
+    def filter_line(self, line): # pragma: no cover
         pass
 
     def __iter__(self):
