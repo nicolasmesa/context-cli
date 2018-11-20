@@ -1,15 +1,13 @@
 #!/usr/bin/env python3
 
-import sys
-
 
 def main():
+    import sys
     try:
         from .core import main
-        sys.exit(main())
+        sys.exit(main(sys.argv))
     except KeyboardInterrupt:
-        from . import ExitStatus
-        sys.exit(ExitStatus.ERROR_CTRL_C)
+        sys.exit(1)
 
 
 if __name__ == '__main__':

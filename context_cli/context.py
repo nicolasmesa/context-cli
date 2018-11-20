@@ -17,6 +17,9 @@ class Context:
     def lines(self):
         return self._lines
 
+    def __repr__(self):
+        return f'{self.__class__.__name__}(lines={self.lines})'
+
     def __str__(self):
         return '\n'.join(self.lines)
 
@@ -31,16 +34,15 @@ class FileIterator:
         self.queue = deque()
 
     def __iter__(self):
-        while True:
-            if len(self.queue):
-                yield self.queue.popleft()
-                continue
+        return self
 
-            line = self.file.readline()
-            if line == '':
-                break
-
-            yield line.rstrip('\n')
+    def __next__(self):
+        if len(self.queue):
+            return self.queue.popleft()
+        line = self.file.readline()
+        if line == '':
+            raise StopIteration
+        return line.rstrip('\n')
 
     def unread(self, line):
         self.queue.append(line)
@@ -69,7 +71,7 @@ class SingleDelimiterContextFactory(ContextFactoryBase):
             something
             ...
             Another thing
-            ....
+            ...
             Last thing
         delimiter:
             "..."
@@ -159,15 +161,14 @@ class StartAndEndDelimiterContextFactory(ContextFactoryBase):
                 context_lines.append(start_line)
 
             for line in self.file_iterator:
-                if line is None:
-                    break
                 if self.is_end(line):
-                    if self.exclude_end_delimiter:
-                        if not self.ignore_end_delimiter:
-                            self.file_iterator.unread(line)
-                    else:
+                    if not self.exclude_end_delimiter:
                         context_lines.append(line)
+                    elif not self.ignore_end_delimiter:
+                        # This end delimiter might be used as a start delimiter later
+                        self.file_iterator.unread(line)
                     break
+
                 context_lines.append(line)
 
             yield Context(context_lines)

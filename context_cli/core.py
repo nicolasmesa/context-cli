@@ -42,7 +42,7 @@ def single_delimiter_context_factory_creator(delimiter_matcher, exclude_delimite
     return factory
 
 
-def main():
+def main(argv):
     import sys
     from . import __doc__
 
@@ -97,10 +97,9 @@ def main():
     ap.add_argument('-o', '--output-delimiter', help='Output delimiter', default='')
     ap.add_argument('files', nargs='*', type=argparse.FileType('r'), default=sys.stdin)
 
-
     # TODO Validate combinations of these
 
-    args = ap.parse_args()
+    args = ap.parse_args(argv[1:])
 
     # TODO: These should actually be reusable classes. I should only need to pass in a start and end class and the
     # class should figure out what to return.
@@ -138,10 +137,6 @@ def main():
             ignore_end_delimiter=ignore_end_delimiter,
         )
     elif delimiter_text or delimiter_regex:
-        exclude_start = True
-        exclude_end = True
-
-        # End delimiter needs to be start delimiter
         delimiter_matcher = None
         exclude_delimiter = True
         if delimiter_text:
@@ -155,12 +150,8 @@ def main():
                 exclude_delimiter=exclude_delimiter
             )
 
-
     if not context_factory_factory:
         ap.error('Expected delimiters to be set. Use -d/-D or -s/-S and -e/-E.')
-
-    logger.debug("args: start_delimiter_matcher:%s, end_delimiter_matcher:%s, exclude_start_delimiter:%s, exclude_end_delimiter: %s, end_delimiter_can_be_start_delimiter: %s",
-                start_delimiter_matcher, end_delimiter_matcher, exclude_start, exclude_end, ignore_end_delimiter)
 
     first = True
     for file in args.files:
