@@ -17,7 +17,15 @@ logging.basicConfig(level=logging.ERROR)
 logger = logging.getLogger(__name__)
 
 
+class UserException(Exception):
+    """
+    Contain readable messages for the users.
+    """
+    pass
+
+
 def start_and_end_delimiter_context_factory_creator(start_delimiter_matcher, end_delimiter_matcher, exclude_start, exclude_end, ignore_end_delimiter):
+    """Returns a factory function for StartAndEndDelimiterContextFactory where only the file is needed"""
 
     def factory(file):
         return StartAndEndDelimiterContextFactory(
@@ -33,6 +41,10 @@ def start_and_end_delimiter_context_factory_creator(start_delimiter_matcher, end
 
 
 def single_delimiter_context_factory_creator(delimiter_matcher, exclude_delimiter):
+    """
+    Returns a factory function for SingleDelimiterContextFactory where only the file is neded.
+    """
+
     def factory(file):
         return SingleDelimiterContextFactory(
             file,
@@ -42,6 +54,42 @@ def single_delimiter_context_factory_creator(delimiter_matcher, exclude_delimite
     return factory
 
 
+def get_context_factory_from_args(ap, args):
+    """
+    Uses the arguments to create a factory of context factories.
+    """
+
+    start_delimiter_matcher = args.start_delimiter_matcher
+    end_delimiter_matcher = args.end_delimiter_matcher
+    delimiter_matcher = args.delimiter_matcher
+
+    exclude_start = args.exclude_start_delimiter
+    exclude_end = args.exclude_end_delimiter
+    ignore_end_delimiter = args.ignore_end_delimiter
+
+    if delimiter_matcher and (start_delimiter_matcher or end_delimiter_matcher):
+        ap.error('-d/-D cannot be used with -s/-S or -e/-E')
+
+    context_factory_factory = None
+    if start_delimiter_matcher and end_delimiter_matcher:
+        context_factory_factory = start_and_end_delimiter_context_factory_creator(
+            start_delimiter_matcher=start_delimiter_matcher,
+            end_delimiter_matcher=end_delimiter_matcher,
+            exclude_start=exclude_start,
+            exclude_end=exclude_end,
+            ignore_end_delimiter=ignore_end_delimiter,
+        )
+    elif delimiter_matcher:
+        context_factory_factory = single_delimiter_context_factory_creator(
+            delimiter_matcher=delimiter_matcher,
+            exclude_delimiter=True,
+        )
+    else:
+        ap.error('Expected delimiters to be set. Use -d/-D or -s/-S and -e/-E.')
+
+    return context_factory_factory
+
+
 def main(argv):
     import sys
     from . import __doc__
@@ -49,12 +97,17 @@ def main(argv):
     ap = argparse.ArgumentParser(
         description=__doc__
     )
-    ap.add_argument('-d', '--delimiter-text', help="delimiter text")
-    ap.add_argument('-D', '--delimiter-regex', help="delimiter regex")
-    ap.add_argument('-s', '--delimiter-start-text', help="delimiter start text")
-    ap.add_argument('-S', '--delimiter-start-regex', help='delimiter start regex')
-    ap.add_argument('-e', '--delimiter-end-text', help='delimiter end text')
-    ap.add_argument('-E', '--delimiter-end-regex', help='delimiter end regex')
+    ap.add_argument('-d', '--delimiter-text', help="delimiter text", dest='delimiter_matcher', type=ContainsTextMatcher)
+    ap.add_argument('-D', '--delimiter-regex', help="delimiter regex", dest='delimiter_matcher', type=RegexMatcher)
+
+    ap.add_argument('-s', '--delimiter-start-text', help="delimiter start text", dest='start_delimiter_matcher',
+                    type=ContainsTextMatcher)
+    ap.add_argument('-S', '--delimiter-start-regex', help='delimiter start regex', dest='start_delimiter_matcher',
+                    type=RegexMatcher)
+    ap.add_argument('-e', '--delimiter-end-text', help='delimiter end text', dest='end_delimiter_matcher',
+                    type=ContainsTextMatcher)
+    ap.add_argument('-E', '--delimiter-end-regex', help='delimiter end regex', dest='end_delimiter_matcher',
+                    type=RegexMatcher)
 
     ap.add_argument('-x', '--exclude-start-delimiter',
                     help='exclude start delimiter from the context', action='store_const', const=True, default=False)
@@ -97,61 +150,9 @@ def main(argv):
     ap.add_argument('-o', '--output-delimiter', help='Output delimiter', default='')
     ap.add_argument('files', nargs='*', type=argparse.FileType('r'), default=sys.stdin)
 
-    # TODO Validate combinations of these
-
     args = ap.parse_args(argv[1:])
 
-    # TODO: These should actually be reusable classes. I should only need to pass in a start and end class and the
-    # class should figure out what to return.
-    delimiter_start_text = args.delimiter_start_text
-    delimiter_start_regex = args.delimiter_start_regex
-    delimiter_end_text = args.delimiter_end_text
-    delimiter_end_regex = args.delimiter_end_regex
-    delimiter_text = args.delimiter_text
-    delimiter_regex = args.delimiter_regex
-
-    start_delimiter_matcher = None
-    end_delimiter_matcher = None
-    exclude_start = args.exclude_start_delimiter
-    exclude_end = args.exclude_end_delimiter
-    ignore_end_delimiter = args.ignore_end_delimiter
-
-    context_factory_factory = None
-
-    if delimiter_start_text:
-        start_delimiter_matcher = ContainsTextMatcher(text=delimiter_start_text)
-    elif delimiter_start_regex:
-        start_delimiter_matcher = RegexMatcher(regexp=delimiter_start_regex)
-
-    if delimiter_end_text:
-        end_delimiter_matcher = ContainsTextMatcher(text=delimiter_end_text)
-    elif delimiter_end_regex:
-        end_delimiter_matcher = RegexMatcher(regexp=delimiter_end_regex)
-
-    if start_delimiter_matcher and end_delimiter_matcher:
-        context_factory_factory = start_and_end_delimiter_context_factory_creator(
-            start_delimiter_matcher=start_delimiter_matcher,
-            end_delimiter_matcher=end_delimiter_matcher,
-            exclude_start=exclude_start,
-            exclude_end=exclude_end,
-            ignore_end_delimiter=ignore_end_delimiter,
-        )
-    elif delimiter_text or delimiter_regex:
-        delimiter_matcher = None
-        exclude_delimiter = True
-        if delimiter_text:
-            delimiter_matcher = ContainsTextMatcher(text=delimiter_text)
-        elif delimiter_regex:
-            delimiter_matcher = RegexMatcher(regexp=delimiter_regex)
-
-        if delimiter_matcher:
-            context_factory_factory = single_delimiter_context_factory_creator(
-                delimiter_matcher=delimiter_matcher,
-                exclude_delimiter=exclude_delimiter
-            )
-
-    if not context_factory_factory:
-        ap.error('Expected delimiters to be set. Use -d/-D or -s/-S and -e/-E.')
+    context_factory_factory = get_context_factory_from_args(ap, args)
 
     first = True
     for file in args.files:

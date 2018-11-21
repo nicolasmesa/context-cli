@@ -1,6 +1,7 @@
 # Context Cli
 
 [![Build Status](https://travis-ci.org/nicolasmesa/context-cli.svg?branch=master)](https://travis-ci.org/nicolasmesa/context-cli)
+[![Coverage](https://coveralls.io/repos/github/nicolasmesa/context-cli/badge.svg?branch=development)](https://coveralls.io/github/nicolasmesa/context-cli?branch=development)
 
 Context Cli is a cli tool to search with contexts.
 

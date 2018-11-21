@@ -7,6 +7,7 @@ with open("README.md", "r") as fh:
 
 test_require = [
     'pytest',
+    'mock',
 ]
 setup_requires=[
     'pytest-runner',
