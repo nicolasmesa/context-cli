@@ -198,7 +198,7 @@ def construct_arg_parser():
 
     # Output
     ap.add_argument('-o', '--output-delimiter', help='Output delimiter', default='')
-    ap.add_argument('files', nargs='*', type=argparse.FileType('r'), default=sys.stdin)
+    ap.add_argument('files', nargs='*', type=argparse.FileType('r'), default=[sys.stdin])
 
     return ap
 
