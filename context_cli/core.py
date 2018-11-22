@@ -1,5 +1,6 @@
 import argparse
 import logging
+import sys
 
 from .context import StartAndEndDelimiterContextFactory, SingleDelimiterContextFactory
 from .filter import (
@@ -15,13 +16,6 @@ from .matcher import ContainsTextMatcher, RegexMatcher
 
 logging.basicConfig(level=logging.ERROR)
 logger = logging.getLogger(__name__)
-
-
-class UserException(Exception):
-    """
-    Contain readable messages for the users.
-    """
-    pass
 
 
 def start_and_end_delimiter_context_factory_creator(start_delimiter_matcher, end_delimiter_matcher, exclude_start, exclude_end, ignore_end_delimiter):
@@ -90,8 +84,58 @@ def get_context_factory_from_args(ap, args):
     return context_factory_factory
 
 
-def main(argv):
-    import sys
+def build_pipeline(context_factory, args):
+    """
+    Builds the pipeline to execute for the context_factory and all of the arguments.
+    """
+
+    curr = context_factory
+
+    # We do text matching first because it's a bit faster. This helps filter out some contexts before they reach the
+    # regex matchers which are slower.
+    for text in args.matches_text:
+        curr = MatchesTextContextFilter(context_generator=curr, text=text)
+
+    for text in args.not_matches_text:
+        curr = NotMatchesTextContextFilter(context_generator=curr, text=text)
+
+    for text in args.contains_text:
+        curr = ContainsTextContextFilter(context_generator=curr, text=text)
+
+    for text in args.not_contains_text:
+        curr = NotContainsTextContextFilter(context_generator=curr, text=text)
+
+    for regexp in args.matches_regex:
+        curr = MatchesRegexContextFilter(context_generator=curr, regexp=regexp)
+
+    for regexp in args.not_matches_regex:
+        curr = NotMatchesRegexContextFilter(context_generator=curr, regexp=regexp)
+
+    for regexp in args.contains_regex:
+        curr = ContainsRegexContextFilter(context_generator=curr, regexp=regexp)
+
+    for regexp in args.not_contains_regex:
+        curr = NotContainsRegexContextFilter(context_generator=curr, regexp=regexp)
+
+    for text in args.line_contains_text:
+        curr = ContainsTextLineFilter(context_generator=curr, text=text)
+
+    for text in args.not_line_contains_text:
+        curr = NotContainsTextLineFilter(context_generator=curr, text=text)
+
+    for regexp in args.line_contains_regex:
+        curr = ContainsRegexLineFilter(context_generator=curr, regexp=regexp)
+
+    for regexp in args.not_line_contains_regex:
+        curr = NotContainsRegexLineFilter(context_generator=curr, regexp=regexp)
+
+    # Ensure no empty contexts
+    curr = NotEmptyContextFilter(context_generator=curr)
+
+    return curr
+
+
+def construct_arg_parser():
     from . import __doc__
 
     ap = argparse.ArgumentParser(
@@ -123,18 +167,24 @@ def main(argv):
     ap.add_argument('-C', '--contains-regex',
                     help='display only contexts that have line(s) that contain this regex', action='append', default=[])
     ap.add_argument('-m', '--matches-text',
-                    help='display only contexts that have line(s) that exactly match this text', action='append', default=[])
+                    help='display only contexts that have line(s) that exactly match this text', action='append',
+                    default=[])
     ap.add_argument('-M', '--matches-regex',
-                    help='display only contexts that have line(s) that exactly match this regex', action='append', default=[])
+                    help='display only contexts that have line(s) that exactly match this regex', action='append',
+                    default=[])
 
     ap.add_argument('-c!', '--not-contains-text',
-                    help="display only contexts that have line(s) that don't contain this text", action='append', default=[])
+                    help="display only contexts that have line(s) that don't contain this text", action='append',
+                    default=[])
     ap.add_argument('-C!', '--not-contains-regex',
-                    help="display only contexts that have line(s) that don't contain this regex", action='append', default=[])
+                    help="display only contexts that have line(s) that don't contain this regex", action='append',
+                    default=[])
     ap.add_argument('-m!', '--not-matches-text',
-                    help="display only contexts that have line(s) that don't exactly match this text", action='append', default=[])
+                    help="display only contexts that have line(s) that don't exactly match this text", action='append',
+                    default=[])
     ap.add_argument('-M!', '--not-matches-regex',
-                    help="display only contexts that have line(s) that don't exactly match this regex", action='append', default=[])
+                    help="display only contexts that have line(s) that don't exactly match this regex", action='append',
+                    default=[])
 
     # Line filters
     ap.add_argument('-l', '--line-contains-text',
@@ -150,66 +200,33 @@ def main(argv):
     ap.add_argument('-o', '--output-delimiter', help='Output delimiter', default='')
     ap.add_argument('files', nargs='*', type=argparse.FileType('r'), default=sys.stdin)
 
-    args = ap.parse_args(argv[1:])
+    return ap
 
+
+def main(argv):
+    """
+    Main method.
+    """
+
+    ap = construct_arg_parser()
+    args = ap.parse_args(argv[1:])
     context_factory_factory = get_context_factory_from_args(ap, args)
 
     first = True
     for file in args.files:
         context_factory = context_factory_factory(file)
+        pipeline = build_pipeline(context_factory, args)
 
-        curr = context_factory
-
-        # We do text matching first because it's a bit faster. This helps filter out some contexts before they reach the
-        # regex matchers which are slower.
-        for text in args.matches_text:
-            curr = MatchesTextContextFilter(context_generator=curr, text=text)
-
-        for text in args.not_matches_text:
-            curr = NotMatchesTextContextFilter(context_generator=curr, text=text)
-
-        for text in args.contains_text:
-            curr = ContainsTextContextFilter(context_generator=curr, text=text)
-
-        for text in args.not_contains_text:
-            curr = NotContainsTextContextFilter(context_generator=curr, text=text)
-
-        for regexp in args.matches_regex:
-            curr = MatchesRegexContextFilter(context_generator=curr, regexp=regexp)
-
-        for regexp in args.not_matches_regex:
-            curr = NotMatchesRegexContextFilter(context_generator=curr, regexp=regexp)
-
-        for regexp in args.contains_regex:
-            curr = ContainsRegexContextFilter(context_generator=curr, regexp=regexp)
-
-        for regexp in args.not_contains_regex:
-            curr = NotContainsRegexContextFilter(context_generator=curr, regexp=regexp)
-
-        for text in args.line_contains_text:
-            curr = ContainsTextLineFilter(context_generator=curr, text=text)
-
-        for text in args.not_line_contains_text:
-            curr = NotContainsTextLineFilter(context_generator=curr, text=text)
-
-        for regexp in args.line_contains_regex:
-            curr = ContainsRegexLineFilter(context_generator=curr, regexp=regexp)
-
-        for regexp in args.not_line_contains_regex:
-            curr = NotContainsRegexLineFilter(context_generator=curr, regexp=regexp)
-
-        # Ensure no empty contexts
-        curr = NotEmptyContextFilter(context_generator=curr)
-
-        for ctx in curr:
+        for context in pipeline:
             if not first and args.output_delimiter:
                 sys.stdout.write(args.output_delimiter)
                 sys.stdout.write('\n')
             first = False
 
-            text = str(ctx)
+            text = str(context)
             sys.stdout.write(text)
             if not text.endswith('\n'):
                 sys.stdout.write('\n')
             sys.stdout.flush()
 
+    return 0
