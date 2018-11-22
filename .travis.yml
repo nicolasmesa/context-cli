@@ -1,0 +1,18 @@
+language: python
+python:
+  - 3.7
+  - 3.6
+dist: xenial
+install: pip install -U tox-travis
+script: tox
+
+deploy:
+  provider: pypi
+  distributions: sdist bdist_wheel
+  user: nicolasmesa
+  password:
+    secure: BTWHFUcAbLwmrEcbKLvbZ9aBAYHBURFjO9T/LclSh/wKLkQlzFv5sHYHhfqvaYJEYf2MrHW4eBtZjNHNjwvlY71IYazbLExPrGfhyDmXsragsxPLkx7I4gv1Dx9lmb0gwjxgD2AyyMvuuShf7ijSw+3Xc2yei8EedQv6HLE1pHJEiZ7FR1h+Uo53C8XGdH9k4xzfHzyQKfHCA19G5j+SGD3UDCK7ZkknFWxBy4wyD8/uLokhEPV4NQKw904okAZs1Q49fCWVa9D3RZSrBHigP+0VAiIBD/epaGrEL/76uou+8H8Ks7KthM1WWUZByvZJkTFhdPSYDQG6DEAHxG90VIE9DX8zcxAaFRFpnSnC21AAi2qmOL0BlG5g2FNhm6YF0d3yufGDRhJUykWYGPW0gPwRMYR9PBxmn34JXzY6RalWlM02wJb6QQHfWxxdpbZ/mEj0Ysf/w/mewbs/mu0gBACRKGNZ4Z3dGSBoQRuWKientzrU7wwc4GyPCOzmuzDGAhWJq4SQKmynsgoiCO2ZZnvWyzittOQkAsKahYty/mgfe2b4M7z1zX+Bh7V+2wp2Mx4gANRJiALG69T4KlD/36yxooYT3XATWjUaG8Afs6qCEgjKv42CCEprPSDmSZ3tCSaoFmgTXtKEQurpKMM+z9j/pXHwfTp4jCLqOi3EyMY=
+  on:
+    tags: true
+    repo: nicolasmesa/context-cli
+    python: 3.6
