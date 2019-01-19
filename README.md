@@ -18,16 +18,16 @@ $ pip install context-cli
 
 ```
 $ ctx -h
-usage: ctx [-h] [-d DELIMITER_TEXT] [-D DELIMITER_REGEX]
-                   [-s DELIMITER_START_TEXT] [-S DELIMITER_START_REGEX]
-                   [-e DELIMITER_END_TEXT] [-E DELIMITER_END_REGEX] [-x] [-X]
-                   [-i] [-c CONTAINS_TEXT] [-C CONTAINS_REGEX]
-                   [-m MATCHES_TEXT] [-M MATCHES_REGEX]
-                   [-c! NOT_CONTAINS_TEXT] [-C! NOT_CONTAINS_REGEX]
-                   [-m! NOT_MATCHES_TEXT] [-M! NOT_MATCHES_REGEX]
-                   [-l LINE_CONTAINS_TEXT] [-L LINE_CONTAINS_REGEX]
-                   [-l! NOT_LINE_CONTAINS_TEXT] [-L! NOT_LINE_CONTAINS_REGEX]
-                   [-o OUTPUT_DELIMITER]
+usage: ctx [-h] [-t TYPE] [-w] [-d DELIMITER_MATCHER]
+                   [-D DELIMITER_MATCHER] [-s START_DELIMITER_MATCHER]
+                   [-S START_DELIMITER_MATCHER] [-e END_DELIMITER_MATCHER]
+                   [-E END_DELIMITER_MATCHER] [-x] [-X] [-i]
+                   [-c CONTAINS_TEXT] [-C CONTAINS_REGEX] [-m MATCHES_TEXT]
+                   [-M MATCHES_REGEX] [-c! NOT_CONTAINS_TEXT]
+                   [-C! NOT_CONTAINS_REGEX] [-m! NOT_MATCHES_TEXT]
+                   [-M! NOT_MATCHES_REGEX] [-l LINE_CONTAINS_TEXT]
+                   [-L LINE_CONTAINS_REGEX] [-l! NOT_LINE_CONTAINS_TEXT]
+                   [-L! NOT_LINE_CONTAINS_REGEX] [-o OUTPUT_DELIMITER]
                    [files [files ...]]
 
 A cli tool to search with contexts.
@@ -37,17 +37,19 @@ positional arguments:
 
 optional arguments:
   -h, --help            show this help message and exit
-  -d DELIMITER_TEXT, --delimiter-text DELIMITER_TEXT
+  -t TYPE, --type TYPE  type of search as specified in .ctxrc
+  -w, --write           write the current context search to .ctxrc
+  -d DELIMITER_MATCHER, --delimiter-text DELIMITER_MATCHER
                         delimiter text
-  -D DELIMITER_REGEX, --delimiter-regex DELIMITER_REGEX
+  -D DELIMITER_MATCHER, --delimiter-regex DELIMITER_MATCHER
                         delimiter regex
-  -s DELIMITER_START_TEXT, --delimiter-start-text DELIMITER_START_TEXT
+  -s START_DELIMITER_MATCHER, --delimiter-start-text START_DELIMITER_MATCHER
                         delimiter start text
-  -S DELIMITER_START_REGEX, --delimiter-start-regex DELIMITER_START_REGEX
+  -S START_DELIMITER_MATCHER, --delimiter-start-regex START_DELIMITER_MATCHER
                         delimiter start regex
-  -e DELIMITER_END_TEXT, --delimiter-end-text DELIMITER_END_TEXT
+  -e END_DELIMITER_MATCHER, --delimiter-end-text END_DELIMITER_MATCHER
                         delimiter end text
-  -E DELIMITER_END_REGEX, --delimiter-end-regex DELIMITER_END_REGEX
+  -E END_DELIMITER_MATCHER, --delimiter-end-regex END_DELIMITER_MATCHER
                         delimiter end regex
   -x, --exclude-start-delimiter
                         exclude start delimiter from the context
@@ -114,6 +116,24 @@ The `-o` adds the "========" between each context.
 ```
 $ ctx -xXi -S '^```$' -E '^```$' -c install -o "========" README.md
 ```
+
+
+### Save common arguments
+
+If you use `ctx` with the same arguments over and over again, you can save those arguments under a name. In
+the following example, we add `my_saved_search` by using the `--type` (or `-t`) and `--write` (or `-w`).
+
+```
+$ ctx --type my_saved_search -write -xXi -s '-----' -e 'end' -o '=========='
+```
+
+And then use it (note there is no `--write` anymore)
+
+```
+$ ctx -t my_saved_search my_file.txt
+```
+
+The configuration is saved to your home folder in a `.ctxrc` file.
 
 
 TODO: Add more examples

@@ -2,6 +2,12 @@ import argparse
 import logging
 import sys
 
+from pathlib import Path
+
+
+logging.basicConfig(level=logging.ERROR)
+logger = logging.getLogger(__name__)
+
 from .context import StartAndEndDelimiterContextFactory, SingleDelimiterContextFactory
 from .filter import (
     # ContextFilters
@@ -13,9 +19,7 @@ from .filter import (
     ContainsTextLineFilter, ContainsRegexLineFilter, NotContainsTextLineFilter, NotContainsRegexLineFilter,
 )
 from .matcher import ContainsTextMatcher, RegexMatcher
-
-logging.basicConfig(level=logging.ERROR)
-logger = logging.getLogger(__name__)
+from .util import CtxRc, TypeArgDoesNotExistException
 
 
 def start_and_end_delimiter_context_factory_creator(start_delimiter_matcher, end_delimiter_matcher, exclude_start, exclude_end, ignore_end_delimiter):
@@ -135,12 +139,19 @@ def build_pipeline(context_factory, args):
     return curr
 
 
+
+
 def construct_arg_parser():
     from . import __doc__
 
     ap = argparse.ArgumentParser(
         description=__doc__
     )
+
+    ap.add_argument('-t', '--type', help='type of search as specified in .ctxrc', type=str)
+    ap.add_argument('-w', '--write',
+                    help='write the current context search to .ctxrc', action='store_const', const=True, default=False)
+
     ap.add_argument('-d', '--delimiter-text', help="delimiter text", dest='delimiter_matcher', type=ContainsTextMatcher)
     ap.add_argument('-D', '--delimiter-regex', help="delimiter regex", dest='delimiter_matcher', type=RegexMatcher)
 
@@ -203,13 +214,56 @@ def construct_arg_parser():
     return ap
 
 
+def parse_args(ap, argv):
+    """
+    Parses the arguments. It checks whether the `--type` arg is set, and, if it is, either writes the arguments to the
+    .ctxrc file or gets the args from there. If `--write` is specified, th ctxrx is written to and then this function
+    exits the program.
+    """
+
+    args = ap.parse_args(argv[1:])
+
+    if not args.type:
+        return args
+
+    path = Path.home() / '.ctxrc'
+    ctxrc = CtxRc.from_path(path)
+
+    if args.write:
+        # Adding files to types doesn't make sense. Since it's a bit hard to remove the files from the argumnents, we
+        # add this restriction.
+        if args.files[0].name != '<stdin>':
+            ap.error("Don't specify files when writing a type")
+            return # We never get here but unit tests keep going since ap.error is mocked
+
+        ctxrc.add_type(args.type, argv[1:])
+        ctxrc.save(path)
+        ap.exit(0)
+        return # We never get here but unit tests keep going since ap.exit is mocked
+
+    try:
+        type_argv = ctxrc.get_type_argv(args.type)
+    except TypeArgDoesNotExistException as e:
+        ap.error(str(e))
+        return None # We never get here
+
+    new_argv = type_argv + argv[1:]
+    new_args = ap.parse_args(new_argv)
+    new_args.files = args.files
+    new_args.write = False
+    new_args.type = None
+    return new_args
+
+
 def main(argv):
     """
     Main method.
     """
 
     ap = construct_arg_parser()
-    args = ap.parse_args(argv[1:])
+
+    args = parse_args(ap, argv)
+
     context_factory_factory = get_context_factory_from_args(ap, args)
 
     first = True

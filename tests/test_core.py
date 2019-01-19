@@ -1,10 +1,14 @@
 from mock import patch, mock, ANY
+from pathlib import Path
 
 from context_cli.core import (
     start_and_end_delimiter_context_factory_creator, single_delimiter_context_factory_creator,
-
-    get_context_factory_from_args, build_pipeline, construct_arg_parser
+    get_context_factory_from_args, build_pipeline, construct_arg_parser,
+    parse_args,
 )
+from context_cli.util import TypeArgDoesNotExistException
+
+HOME_PATH = '/my/home'
 
 
 @patch('context_cli.context.StartAndEndDelimiterContextFactory.__init__', return_value=None)
@@ -306,3 +310,104 @@ def test_build_pipeline_not_contains_regex_line_filter(not_empty_filter_mock, no
 def test_construct_arg_parser():
     ap = construct_arg_parser()
     assert ap is not None
+
+
+def test_parse_args_no_type():
+    args = mock.MagicMock()
+    ap = mock.MagicMock()
+    ap.parse_args.return_value = args
+    args.type = None
+
+    result_args = parse_args(ap, ['ctx', 'argv'])
+    assert result_args is args
+
+
+@patch('context_cli.core.Path')
+@patch('context_cli.core.CtxRc')
+def test_parse_args_write_and_files(ctxrc_cls, path_cls):
+    ctxrc_cls.from_path.return_value = mock.MagicMock()
+    path_cls.home.return_value = Path(HOME_PATH)
+    args = mock.MagicMock()
+    ap = mock.MagicMock()
+    ap.parse_args.return_value = args
+    args.type = 'some_type'
+    args.write = True
+    file = mock.MagicMock()
+    file.name = 'not <stdin>'
+    args.files = [
+        file
+    ]
+
+    parse_args(ap, ['ctx', 'argv'])
+    ap.error.assert_called_once()
+
+
+@patch('context_cli.core.Path')
+@patch('context_cli.core.CtxRc')
+def test_parse_args_write_and_no_files(ctxrc_cls, path_cls):
+    ctxrc = mock.MagicMock()
+    ctxrc_cls.from_path.return_value = ctxrc
+    path_cls.home.return_value = Path(HOME_PATH)
+    args = mock.MagicMock()
+    ap = mock.MagicMock()
+    ap.parse_args.return_value = args
+    args.type = 'some_type'
+    args.write = True
+    file = mock.MagicMock()
+    file.name = '<stdin>'
+    args.files = [
+        file
+    ]
+
+    parse_args(ap, ['ctx', 'argv'])
+    ctxrc.add_type.assert_called_once_with('some_type', ['argv'])
+    ctxrc.save.assert_called_once_with(Path(HOME_PATH) / '.ctxrc')
+    ap.exit.assert_called_once_with(0)
+
+
+@patch('context_cli.core.Path')
+@patch('context_cli.core.CtxRc')
+def test_parse_args_arg_does_not_exist(ctxrc_cls, path_cls):
+    type_arg = 'some_type_doesnt_exist'
+    exception = TypeArgDoesNotExistException(missing_type=type_arg)
+    ctxrc = mock.MagicMock()
+    ctxrc.get_type_argv.side_effect = exception
+    ctxrc_cls.from_path.return_value = ctxrc
+    path_cls.home.return_value = Path(HOME_PATH)
+    args = mock.MagicMock()
+    args.write = False
+    ap = mock.MagicMock()
+    ap.parse_args.return_value = args
+    args.type = type_arg
+
+    parse_args(ap, ['ctx', 'argv'])
+
+    ap.error.assert_called_once_with(str(exception))
+
+
+@patch('context_cli.core.Path')
+@patch('context_cli.core.CtxRc')
+def test_parse_args_arg_exists(ctxrc_cls, path_cls):
+    type_arg = 'some_arg'
+    type_argv = ['some', 'argv']
+    argv = ['ctx', 'something', 'else']
+    ctxrc = mock.MagicMock()
+    ctxrc.get_type_argv.return_value = type_argv
+    ctxrc_cls.from_path.return_value = ctxrc
+    path_cls.home.return_value = Path(HOME_PATH)
+    args = mock.MagicMock()
+    args.write = False
+    args.files = [
+        mock.MagicMock(),
+        mock.MagicMock()
+    ]
+    ap = mock.MagicMock()
+    ap.parse_args.return_value = args
+    args.type = type_arg
+
+    new_args = parse_args(ap, argv)
+    ap.parse_args.assert_called_with(type_argv + argv[1:])
+    ap.parse_args.assert_called_with(['some', 'argv', 'something', 'else'])
+    assert new_args.type is None
+    assert new_args.write is False
+    assert new_args.files is args.files
