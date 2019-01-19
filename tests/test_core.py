@@ -4,7 +4,7 @@ from pathlib import Path
 from context_cli.core import (
     start_and_end_delimiter_context_factory_creator, single_delimiter_context_factory_creator,
     get_context_factory_from_args, build_pipeline, construct_arg_parser,
-    parse_args,
+    parse_args, main
 )
 from context_cli.util import TypeArgDoesNotExistException
 
@@ -411,3 +411,41 @@ def test_parse_args_arg_exists(ctxrc_cls, path_cls):
     assert new_args.type is None
     assert new_args.write is False
     assert new_args.files is args.files
+
+@patch('context_cli.core.sys')
+@patch('context_cli.core.build_pipeline')
+@patch('context_cli.core.get_context_factory_from_args')
+@patch('context_cli.core.parse_args')
+@patch('context_cli.core.construct_arg_parser')
+def test_main(construct_arg_parser_fn, parse_args_fn, get_context_factory_from_args_fn, build_pipeline_fn, sys):
+    ap = mock.MagicMock()
+    construct_arg_parser_fn.return_value = ap
+    argv = ['ctx', 'something']
+    args = mock.MagicMock()
+    file1 = mock.MagicMock()
+    file2 = mock.MagicMock()
+    args.files = [file1, file2]
+    args.output_delimiter = 'output_delimiter'
+    parse_args_fn.return_value = args
+    context_factory_factory = mock.MagicMock()
+    get_context_factory_from_args_fn.return_value = context_factory_factory
+
+    context1 = mock.MagicMock()
+    context1.__str__.return_value = 'context1'
+    context2 = mock.MagicMock()
+    context2.__str__.return_value = "context2\n"
+    pipeline = [context1, context2]
+    build_pipeline_fn.return_value = pipeline
+
+    return_value = main(argv)
+    assert 0 == return_value
+    parse_args_fn.assert_called_once_with(ap, argv)
+    get_context_factory_from_args_fn.assert_called_once_with(ap, args)
+    context_factory_factory.assert_any_call(file1)
+    context_factory_factory.assert_any_call(file2)
+    sys.stdout.write.assert_any_call(args.output_delimiter)
+    sys.stdout.write.assert_any_call("\n")
+    sys.stdout.write.assert_any_call('context1')
+    sys.stdout.write.assert_any_call("context2\n")
+
+
