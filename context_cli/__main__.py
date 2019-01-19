@@ -4,7 +4,7 @@
 def main():
     import sys
     try:
-        from .core import main
+        from context_cli.core import main
         sys.exit(main(sys.argv))
     except BrokenPipeError:
         # Prevent any errors from showing up if we get a SIGPIPE (for example ctx ... | head)
